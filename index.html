@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inverse Engine Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0F1115;--panel:#171A21;--line:#2A2E37;--ink:#F2F2EE;--mut:#9AA0AB;--acc:#FF5A1F;--g:#2FBF8A;--a:#F2A21B;--r:#F0443A;--x:#7A808C}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 75% -10%,#1d2230 0,var(--bg) 60%);color:var(--ink);font:16px/1.45 Barlow,Arial,sans-serif;min-height:100vh}
+body.bad::after{content:"";position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 120px var(--r);animation:flash 1.1s ease-out forwards}
+@keyframes flash{from{opacity:1}to{opacity:0}}
+h1,h2,h3,.big{font-family:'Barlow Condensed',Arial Narrow,Arial,sans-serif;margin:0}
+header{padding:22px 32px 6px}
+h1{font-size:clamp(2.2rem,5vw,3.6rem);line-height:.95;text-transform:uppercase}
+h1 span{color:var(--acc)}
+.tag{color:var(--mut);font-size:1.15rem;margin-top:6px}
+main{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:22px;padding:18px 32px 40px}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:14px}}
+.panel{background:var(--panel);border:1px solid var(--line);padding:16px}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tabs button,.chip,.go{font:600 .95rem Barlow,Arial;border:1px solid var(--line);background:#1d212a;color:var(--ink);padding:8px 12px;cursor:pointer;transition:.15s}
+.tabs button.on{background:var(--acc);border-color:var(--acc);color:#111}
+.tabs button:hover,.chip:hover{border-color:var(--acc)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.go{width:100%;margin-top:12px;padding:13px;background:var(--acc);border-color:var(--acc);color:#111;font-size:1.15rem;font-family:'Barlow Condensed',Arial;letter-spacing:.3px}
+.go:hover{transform:translateY(-2px);box-shadow:0 8px 22px #ff5a1f44}
+.go.alt{background:transparent;color:var(--ink);border-color:var(--line)}
+label{display:block;color:var(--mut);margin:12px 0 4px;font-size:.92rem}
+input[type=range]{width:100%;accent-color:var(--acc)}
+input[type=number],select{width:100%;background:#0F1115;color:var(--ink);border:1px solid var(--line);padding:9px;font:inherit}
+.big{font-size:2.6rem;line-height:1}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chips{margin-top:14px}.chips small{display:block;color:var(--mut);margin-bottom:6px}
+.chip{font-weight:500;padding:6px 10px;border-radius:20px}
+.hid{display:none}
+.stage{display:flex;flex-direction:column;gap:16px}
+.top{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
+@media(max-width:700px){.top{grid-template-columns:1fr}}
+.hero{display:flex;flex-direction:column;justify-content:center;gap:2px}
+.hero .big{font-size:clamp(3.4rem,8vw,5.6rem);color:var(--acc)}
+.hero .big.speed{color:var(--ink)}
+.msg{color:var(--mut)}
+svg{width:100%;height:auto;display:block}
+#needle{transform-origin:120px 120px;transition:transform 1.1s cubic-bezier(.3,1.7,.5,1)}
+.shake{animation:shake .5s 2}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.banner{padding:14px 16px;border:1px solid var(--r);background:#2a1513;font-size:1.1rem}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.cards{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-left:8px solid var(--c);padding:14px 16px}
+.card.pop{animation:pop .55s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:var(--d,0s)}
+@keyframes pop{from{opacity:0;transform:translateY(22px) scale(.97)}}
+.card h3{font-size:1.9rem;color:var(--c)}
+.sub{color:var(--mut);margin-bottom:6px}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 10px}
+.stat b{display:block;font:700 1.6rem/1.05 'Barlow Condensed',Arial}
+.stat span{font-size:.82rem;color:var(--mut)}
+.card ul{margin:4px 0 0 18px;padding:0}
+.known{margin-top:10px;padding:8px 10px;background:#0F1115;font-size:.95rem}
+details{border:1px dashed var(--line);padding:8px 12px}
+summary{cursor:pointer;color:var(--mut)}
+details .card{margin-top:10px}
+footer{color:var(--mut);font-size:.85rem;padding:0 32px 24px}
+.face{padding:8px 14px 6px}.mood{text-align:center;color:var(--mut);margin-top:-2px;min-height:1.4em}
+#face{--e:#7FB2FF;--a:6deg;--ty:0px;--low:0px;--sx:1;--sy:1;--hn:0;--px:0;--py:0;max-height:150px}
+#face .ring,#face .core,#face .horn{fill:none;stroke:var(--e);transition:stroke .6s,fill .6s}
+#face .core{fill:var(--e);stroke:none;opacity:.35}#face .horn{fill:var(--e);stroke:none;opacity:var(--hn);transition:opacity .5s,fill .6s}
+#face .eye{filter:drop-shadow(0 0 7px var(--e));transition:filter .6s}
+#face .lid{transform:translateY(var(--ty)) rotate(var(--a));transition:transform .7s cubic-bezier(.3,1.5,.5,1)}
+#face .low{transform:translateY(var(--low));transition:transform .7s cubic-bezier(.3,1.5,.5,1)}
+#face .pupT{transform:translate(calc(var(--px)*7px),calc(var(--py)*5px));transition:transform .15s}
+#face .pup{transform:scale(var(--sx),var(--sy));transition:transform .6s cubic-bezier(.3,1.5,.5,1)}
+#face.blk{--ty:52px!important}
+#face.breathe .ring{animation:breathe 3s ease-in-out infinite}#face.flick .ring{animation:flick .45s linear infinite}#face.pulse .eye{animation:pulse .9s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.7}}@keyframes flick{0%,100%{opacity:1}30%{opacity:.55}60%{opacity:.95}80%{opacity:.5}}@keyframes pulse{50%{filter:drop-shadow(0 0 20px var(--e))}}
+.known a{color:var(--acc);margin-right:14px}
+.two{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}@media(max-width:700px){.two{grid-template-columns:1fr}}
+#v3d{height:300px;cursor:grab;touch-action:none}#v3d canvas{display:block;width:100%!important;height:100%!important}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<header><h1>Inverse <span>Engine</span> Design</h1>
+<div class="tag">Tell it the goal. It designs the engine, and says plainly when it can't.</div></header>
+<main>
+<section class="panel">
+ <div class="tabs" role="tablist">
+  <button class="on" data-t="1">I want a fast car</button><button data-t="2">Power goal</button><button data-t="3">Check my engine</button><button data-t="4">Find a car</button></div>
+ <div id="prefs"><label for="lay">Engine layout</label><select id="lay"><option value="auto">Let the AI choose</option><option value="I">Inline</option><option value="V">V</option><option value="B">Boxer (flat)</option></select>
+ <label for="bst">Boost</label><select id="bst"><option value="auto">Let the AI choose</option><option value="na">Naturally aspirated</option><option value="boost">Turbo or supercharger</option></select></div>
+ <div id="t1">
+  <label for="secs">0 to 100 km/h in <b id="secsv">4.0</b> seconds</label>
+  <input id="secs" type="range" min="2" max="12" step="0.1" value="4">
+  <label for="kind">Car type</label>
+  <select id="kind"><option>Hatchback</option><option selected>Sedan</option><option>Sports car</option><option>SUV</option></select>
+  <label for="size">Engine size limit</label>
+  <select id="size"><option value="0">Any size</option><option value="2000">Up to 2.0 L</option><option value="1400">Up to 1.4 L</option><option value="1000">Up to 1.0 L</option></select>
+  <button class="go" id="launch">Launch it</button>
+  <div class="chips"><small>Try one</small><div class="row" id="presets"></div></div>
+ </div>
+ <div id="t2" class="hid">
+  <label for="hp">Power goal: <b id="hpv">500</b> hp</label>
+  <input id="hp" type="range" min="50" max="2500" step="10" value="500">
+  <label for="fuel2">Fuel</label><select id="fuel2"><option>Petrol</option><option>Diesel</option></select>
+  <label for="cap">Max engine size in cc (0 = no limit)</label><input id="cap" type="number" min="0" max="9000" step="100" value="0">
+  <button class="go" id="go2">Design the engine</button>
+  <div class="chips"><small>Try one</small><div class="row"><button class="chip" id="breaker">Break physics: 2000 hp from 1.0 L</button></div></div>
+ </div>
+ <div id="t4" class="hid">
+  <label for="q">Type a car name (e.g. Fortuner Legender, Creta, Nexon)</label>
+  <input id="q" type="text" list="names" placeholder="Start typing..." autocomplete="off" style="width:100%;background:#0F1115;color:var(--ink);border:1px solid var(--line);padding:10px;font:inherit">
+  <datalist id="names"></datalist>
+  <button class="go" id="go4">Look it up</button>
+  <div class="chips"><small>Other matches</small><div class="row" id="alts"></div></div>
+ </div>
+ <div id="t3" class="hid">
+  <label>Power (hp)</label><input id="sp" type="number" value="503">
+  <label>Cylinders</label><select id="scyl"><option>3</option><option>4</option><option selected>6</option><option>8</option><option>12</option></select>
+  <label>Displacement (cc)</label><input id="scc" type="number" value="2993">
+  <label>Peak-power rpm</label><input id="srpm" type="number" value="6250">
+  <label>Stroke (mm)</label><input id="sst" type="number" value="90" step="0.5">
+  <label>Fuel</label><select id="fuel3"><option>Petrol</option><option>Diesel</option></select>
+  <button class="go" id="go3">Check this engine</button>
+ </div>
+</section>
+<section class="stage">
+ <div class="panel face"><svg viewBox="0 0 520 150" id="face" aria-label="Animated headlight eyes that show how stressed the engine is"></svg><div class="mood" id="mood"></div></div>
+ <div class="top">
+  <div class="panel hero"><div class="msg" id="herolbl">Power needed</div><div class="big" id="hero">--</div><div class="msg" id="herosub">Pick a goal to begin</div></div>
+  <div class="panel"><svg viewBox="0 0 240 150" id="gauge" aria-label="Difficulty gauge"></svg><div class="msg" style="text-align:center" id="gl">How hard is this goal?</div></div>
+ </div>
+ <div class="two"><div class="panel"><div id="v3d" class="hid"></div><svg viewBox="0 0 520 170" id="eng" aria-label="Animated engine"></svg><div class="msg" id="v3cap" style="text-align:center"></div></div>
+ <div class="panel"><svg viewBox="0 0 400 130" id="car" aria-label="Car illustration"></svg><div class="msg" id="carcap" style="text-align:center"></div></div></div>
+ <div id="banner"></div>
+ <div id="out"></div>
+</section></main>
+<footer><span id="cov"></span> Limits come from road-car data and a few sourced extreme engines. Parts guidance is rule-based engineering knowledge, not measured data.</footer>
+<script src="known.js"></script>
+<script src="three.min.js" onerror="document.write('<script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js&quot;><\/script>')"></script>
+<script>
+/* ---------- engine logic (port of engine_core.py) ---------- */
+const BP={Petrol:23.6,Diesel:26.4},PS=20,PU_B=36.3,PU_S=27,EX_B=80,EX_S=36.2,HPL=[154,316,732];
+const TN=['Proven','Pushed','Extreme','Beyond'],COL=['#2FBF8A','#F2A21B','#F0443A','#7A808C'];
+const SUBS=['Normal road-car engineering','Performance and hypercar territory','Race and drag only: lasts seconds'];
+const RISK=['Low risk: normal road-car territory.','Higher wear and heat; shorter engine life.','Engine life measured in seconds or single runs.','Nothing in the data has done this.'];
+const PP=[['Normal production engine, no special parts needed'],['Forced induction (turbo or supercharger) with intercooler','Premium fuel or E85','Forged pistons and connecting rods','Strong head studs and gasket, upgraded cooling'],['Supercharger with very high boost','Nitromethane or methanol fuel','Billet crankshaft, forged aluminium rods and pistons','Rebuild after every run'],['No known combination: reduce the goal']];
+const SP=[['Normal production engine, no special parts needed'],['Shorter stroke or larger bore to cut piston speed','Light forged pistons and rods','Quality bearings and high-flow oiling (dry sump)','Light valvetrain'],['Exotic light materials (titanium, billet parts)','Very short service life, constant rebuilds'],['No known combination: reduce the goal']];
+const WT={Hatchback:1200,Sedan:1500,'Sports car':1450,SUV:1900};
+const KNOWN=[['GMA T.50 V12',3994,654,11500,12,'Petrol'],['Koenigsegg Jesko V8 TT (petrol)',5065,1280,7800,8,'Petrol'],['Koenigsegg Jesko V8 TT (E85)',5065,1600,7800,8,'Petrol'],['Top Fuel dragster (low estimate)',8193,6000,8200,8,'Petrol']].concat(window.KNOWN_CARS||[]);
+const bmep=(p,cc,r)=>p*745.7*120/((cc*1e-6)*r)/1e5, pspd=(s,r)=>2*(s/1000)*r/60;
+const lvl=(v,l)=>{for(let i=0;i<l.length;i++)if(v<=l[i])return i;return 3};
+const partsFor=(lb,lv,li,t)=>(li==t&&li>Math.max(lb,lv))?[...new Set([...PP[t],...SP[t]])]:(lb>=lv?PP:SP)[t];
+const goalHp=(s,w)=>w/Math.pow(s/0.889,1/0.963)*1.341;
+function closest(cc,p,r){let b=null;for(const [n,d,hp,rp] of KNOWN){const g=Math.max(Math.abs(d-cc)/d,Math.abs(hp-p)/hp,Math.abs(rp-r)/rp);if(!b||g<b.gap)b={gap:g,name:n,cc:d,hp:hp,rpm:rp}}
+ b.status=b.gap<=.02?'exact':b.gap<=.25?'close':'none';return b}
+const OPT={layout:'auto',boost:'auto'},LAYS={auto:[3,4,6,8,12],I:[3,4,6],V:[6,8,12],B:[4,6]},NA_CAP=14;
+const layOf=(cyl,L)=>L!='auto'?L:(cyl>=8?'V':'I'),lname=(l,n)=>l=='I'?'Inline-'+n:l=='V'?'V'+n:'Boxer-'+n;
+const LNOTE={I:'smooth and simple, easy to package',V:'compact for its size, strong low-down torque',B:'low centre of gravity and smooth, but wide'};
+function advice(cyl,lay,b,v,t,fuel){const o=[lname(lay,cyl)+': '+LNOTE[lay]];
+ if(b<=NA_CAP)o.push(OPT.boost=='boost'?'Small turbo at low boost (about 0.3 bar): this goal does not really need boost':'Naturally aspirated is enough, no boost needed (typical compression ratio 11 to 13)');
+ else if(b<=BP[fuel])o.push('Single turbo with an intercooler, moderate boost (compression ratio about 9.5 to 10.5)');
+ else if(b<=PU_B)o.push('Twin turbos (or a large single) with charge cooling; premium petrol or E85; lower compression ratio (about 8.5 to 9.5)');
+ else if(b<=EX_B)o.push('Supercharger or very high boost; race fuel (methanol or nitromethane); low compression ratio');
+ else o.push('No known setup reaches this pressure');
+ if(t>=1)o.push('Forged pistons and connecting rods; upgraded cooling and oiling');
+ if(t>=2)o.push('Billet crankshaft and exotic materials; rebuild after every run');
+ if(v>PS)o.push('Short stroke or bigger bore to limit piston speed; light valvetrain; dry sump');
+ return o}
+function smallest(power,fuel,maxT,maxCc){const bl=[BP[fuel],PU_B,EX_B],sl=[PS,PU_S,EX_S];let best=null;
+ for(const cyl of LAYS[OPT.layout])for(let cc=600;cc<=9000;cc+=100){if(maxCc&&cc>maxCc)continue;if(cc/cyl<250||cc/cyl>1100)continue;
+  for(const ratio of [.9,1,1.2]){const stroke=Math.pow(4*(cc/cyl)*1000/(3.14159*ratio*ratio),1/3);
+   for(let rpm=4000;rpm<=12000;rpm+=250){const b=bmep(power,cc,rpm),v=pspd(stroke,rpm),lb=lvl(b,bl),lv=lvl(v,sl),li=lvl(power/(cc/1000),HPL),t=Math.max(lb,lv,li,rpm>8500?1:0);
+    if(t>maxT||b>(OPT.boost=='na'?NA_CAP:1e9))continue;if(t<=1&&cc/cyl>700)continue;
+    if(!best||cc<best.cc||(cc==best.cc&&t<best.tier))best={cc,tier:t,cyl,ratio,stroke:Math.round(stroke*10)/10,rpm,bmep:b,speed:v,hpl:power/(cc/1000),lay:layOf(cyl,OPT.layout),parts:advice(cyl,layOf(cyl,OPT.layout),b,v,t,fuel),known:closest(cc,power,rpm)}}}}
+ return best}
+function options(power,fuel,cap){const tiers=[0,1,2].map(t=>smallest(power,fuel,t,cap));let feas=null;
+ if(tiers.every(x=>!x)){let p=power;while(p>20&&!smallest(p,fuel,2,cap))p*=.95;feas=p}return{power,tiers,feas}}
+function check(p,cc,r,st,fuel){const b=bmep(p,cc,r),v=pspd(st,r),h=p/(cc/1000),lb=lvl(b,[BP[fuel],PU_B,EX_B]),lv=lvl(v,[PS,PU_S,EX_S]),li=lvl(h,HPL),t=Math.max(lb,lv,li,r>8500?1:0);
+ return{tier:t,bmep:b,speed:v,hpl:h,parts:partsFor(lb,lv,li,t),known:closest(cc,p,r)}}
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);let mode=1,cyl=4,tierC=COL[0],rev=1,idle=true;
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+function countTo(el,to,dec,dur,suffix){if(reduce){el.textContent=to.toFixed(dec)+(suffix||'');return}const t0=performance.now(),from=0;
+ (function f(n){const k=Math.min(1,(n-t0)/dur),e=1-Math.pow(1-k,3);el.textContent=(from+(to-from)*e).toFixed(dec)+(suffix||'');if(k<1)requestAnimationFrame(f)})(t0)}
+/* gauge */
+(function(){const g=$('gauge');let s='';for(let i=0;i<4;i++){const a0=(-90+i*45)*Math.PI/180,a1=(-45+i*45)*Math.PI/180,P=(a,r)=>[120+r*Math.sin(a),120-r*Math.cos(a)];
+ const[x0,y0]=P(a0+.02,92),[x1,y1]=P(a1-.02,92);s+=`<path d="M${x0} ${y0}A92 92 0 0 1 ${x1} ${y1}" stroke="${COL[i]}" stroke-width="16" fill="none"/>`;
+ const[tx,ty]=P((a0+a1)/2,68);s+=`<text x="${tx}" y="${ty+4}" fill="#9AA0AB" font-size="10" text-anchor="middle" font-family="Barlow,Arial">${TN[i]}</text>`}
+ s+='<g id="needle" style="transform:rotate(-67.5deg)"><line x1="120" y1="120" x2="120" y2="38" stroke="#F2F2EE" stroke-width="3" stroke-linecap="round"/><circle cx="120" cy="120" r="8" fill="#F2F2EE"/></g>';g.innerHTML=s})();
+/* headlight eyes */
+(function(){const eye=x=>`<g transform="translate(${x} 78)"><g class="eye"><g transform="${x>260?'scale(-1 1)':''}">
+ <path d="M-100 12L-74 -34 82 -44 102 -8 88 32-62 38Z" fill="#0b0d12" stroke="#2A2E37" stroke-width="2"/>
+ <circle class="ring" cx="-5" cy="0" r="30" stroke-width="5"/><circle class="ring" cx="-5" cy="0" r="19" stroke-width="2"/><circle class="core" cx="-5" cy="0" r="17"/>
+ <g class="pupT"><g transform="translate(-5 0)"><circle class="pup" r="9" fill="#0b0d12"/></g></g>
+ <g transform="translate(-5 74)"><ellipse class="low" rx="84" ry="34" fill="#0b0d12"/></g>
+ <g transform="translate(-5 -20)"><rect class="lid" x="-102" y="-62" width="204" height="62" fill="#0b0d12"/></g>
+ <path class="horn" d="M-72 -36L-64 -66-44 -40Z"/></g></g></g>`;
+ $('face').innerHTML=eye(135)+eye(385)})();
+const MOODS={'-1':['#7FB2FF',6,0,0,1,1,0,'breathe','Waiting for a goal...'],0:['#2FBF8A',-8,0,-20,1,1,0,'breathe','Proven: relaxed and happy'],1:['#F2A21B',16,0,-4,.85,.85,0,'flick','Pushed: getting tense'],2:['#F0443A',30,0,0,.22,1.35,1,'pulse','Extreme: furious'],3:['#7A808C',0,62,-28,1,1,0,'','Beyond: passed out']};
+function setFace(t){const m=MOODS[t],f=$('face');f.style.setProperty('--e',m[0]);f.style.setProperty('--a',m[1]+'deg');f.style.setProperty('--ty',m[2]+'px');f.style.setProperty('--low',m[3]+'px');f.style.setProperty('--sx',m[4]);f.style.setProperty('--sy',m[5]);f.style.setProperty('--hn',m[6]);
+ f.setAttribute('class',m[7]);f.dataset.t=t;$('mood').textContent=m[8]}
+addEventListener('mousemove',e=>{const f=$('face');f.style.setProperty('--px',(e.clientX/innerWidth*2-1).toFixed(2));f.style.setProperty('--py',(e.clientY/innerHeight*2-1).toFixed(2))});
+setInterval(()=>{const f=$('face');if(f.dataset.t==3||reduce)return;f.classList.add('blk');setTimeout(()=>f.classList.remove('blk'),140)},3800);
+function setGauge(t){setFace(t);$('needle').style.transform=`rotate(${-67.5+t*45}deg)`;$('gauge').classList.remove('shake');if(t==3){void $('gauge').getBoundingClientRect();$('gauge').classList.add('shake')}}
+/* engine drawing */
+function buildEng(n,color){cyl=n;const W=520,w=Math.min(54,(W-30)/n-6),gap=(W-n*w)/(n+1);let s='<rect x="6" y="150" width="508" height="10" fill="#2A2E37"/>';
+ for(let i=0;i<n;i++){const x=gap+i*(w+gap);s+=`<rect x="${x}" y="14" width="${w}" height="130" fill="#0F1115" stroke="#2A2E37"/><circle id="sp${i}" cx="${x+w/2}" cy="20" r="${w/3}" fill="#FF5A1F" opacity="0"/><rect id="pi${i}" x="${x+3}" y="30" width="${w-6}" height="22" fill="${color}"/>`}
+ $('eng').innerHTML=s;tierC=color;rebuild3d(n,color);drawCar(window.KIND,color)}
+let ph=0,last=performance.now();
+function loop(n){const dt=(n-last)/1000;last=n;const hz=reduce?0:(idle?.5:.6+rev*3.2);ph+=dt*hz*2*Math.PI;
+ for(let i=0;i<cyl;i++){const a=ph+i*2*Math.PI*3/cyl,k=.5-.5*Math.cos(a),pi=$('pi'+i),sp=$('sp'+i);if(!pi)break;pi.setAttribute('y',30+k*90);sp.setAttribute('opacity',Math.max(0,.9-k*7).toFixed(2))}
+ requestAnimationFrame(loop)}
+/* 3D engine and car (procedural; layouts: inline up to 6, V8 at 90 deg, V12 at 60 deg) */
+var S3=null,L3=performance.now(),wa=0,CARS={'Sports car':['M20 92L40 80L110 70L150 48Q190 36 235 46L280 66L350 74Q380 78 384 92V100H20Z','M158 52L190 42Q215 42 232 52L262 68H150Z'],Hatchback:['M20 92L28 70L90 64L120 38Q160 28 215 34L262 38L300 64L360 70Q384 74 384 92V100H20Z','M128 42Q160 34 212 40L252 42L284 62H124Z'],Sedan:['M18 92L28 74L110 66L150 40Q200 30 250 40L290 66L366 72Q386 76 386 92V100H18Z','M158 44Q200 36 244 44L276 64H146Z'],SUV:['M20 92L24 60L80 56L110 28Q170 22 280 28L318 58L368 62Q386 66 386 92V100H20Z','M118 32Q170 27 274 32L304 56H112Z']};
+function drawCar(kind,color){const c=CARS[kind]||CARS['Sports car'];$('car').innerHTML=`<rect y="100" width="400" height="3" fill="#2A2E37"/><path d="${c[0]}" fill="#232833" stroke="${color}" stroke-width="3"/><path d="${c[1]}" fill="${color}" opacity=".25"/>`+[95,305].map(x=>`<circle cx="${x}" cy="98" r="29" fill="#171A21"/><g class="wh" data-x="${x}"><circle cx="${x}" cy="98" r="23" fill="#0b0d12" stroke="#4A5260" stroke-width="3"/><path d="M${x} 78V118M${x-20} 98H${x+20}M${x-14} 84L${x+14} 112M${x+14} 84L${x-14} 112" stroke="#9AA0AB" stroke-width="2.5"/></g>`).join('')+`<path d="M372 80L386 86 384 92 366 88Z" fill="${color}" style="filter:drop-shadow(0 0 6px ${color})"/><rect x="18" y="82" width="8" height="6" fill="#F0443A"/>`;$('carcap').textContent=(CARS[kind]?kind:'Sports car')+' (illustration)'}
+function init3d(){try{if(!window.THREE)return;const T=THREE,el=$('v3d'),ren=new T.WebGLRenderer({antialias:true,alpha:true});ren.setPixelRatio(Math.min(2,devicePixelRatio));el.appendChild(ren.domElement);
+ const sc=new T.Scene(),cam=new T.PerspectiveCamera(40,1,.1,200),grp=new T.Group(),l1=new T.DirectionalLight(0xffffff,.9),pl=new T.PointLight(0xff5a1f,1.1,60);l1.position.set(5,10,8);pl.position.set(0,6,5);sc.add(grp,new T.AmbientLight(0xffffff,.55),l1,pl);
+ S3={ren,sc,cam,grp,el,p:[],ry:.6,rx:.5,drag:false};const rs=()=>{const w=el.clientWidth||600,h=el.clientHeight||300;ren.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()};el.classList.remove('hid');rs();addEventListener('resize',rs);
+ let lx=0,ly=0;el.onpointerdown=e=>{S3.drag=true;lx=e.clientX;ly=e.clientY};addEventListener('pointerup',()=>{S3.drag=false});addEventListener('pointermove',e=>{if(!S3.drag)return;S3.ry+=(e.clientX-lx)*.01;S3.rx+=(e.clientY-ly)*.01;lx=e.clientX;ly=e.clientY});
+ $('eng').classList.add('hid');$('v3cap').textContent='3D model built from the AI design. Drag to rotate.'}catch(e){S3=null;$('v3d').classList.add('hid');$('eng').classList.remove('hid')}}
+function rebuild3d(n,color){if(!S3)return;const T=THREE,g=S3.grp;while(g.children.length)g.remove(g.children[0]);S3.p=[];
+ const x=window.D3x||{ratio:1,stroke:80},k=.02,st=x.stroke*k,b=st*x.ratio,tier=Math.max(-1,COL.indexOf(color)),mc=new T.Color(MOODS[tier][0]),lay=x.lay||(n>=8?'V':'I'),V=lay!='I',per=V?n/2:n,A=(lay=='B'?180:(n==12||n==6)?60:90)*Math.PI/180,pitch=b*1.35,len=per*pitch;
+ const mat=(c,o)=>new T.MeshStandardMaterial(Object.assign({color:c,metalness:.6,roughness:.35},o||{})),metal=mat(0x6b7380),dark=mat(0x1a1d24),acc=mat(mc,{emissive:mc,emissiveIntensity:.5});
+ const add=(m,p,par)=>{(par||g).add(m);m.position.set(p[0],p[1],p[2]);return m};
+ add(new T.Mesh(new T.CylinderGeometry(.3,.3,len+1,16).rotateZ(Math.PI/2),metal),[0,-st*.15,0]);
+ for(let bk=0;bk<(V?2:1);bk++){const bg=new T.Group();bg.rotation.x=V?(bk?1:-1)*A/2:0;g.add(bg);add(new T.Mesh(new T.BoxGeometry(len+.4,st*.9,b*1.5),dark),[0,st*.1,0],bg);
+  for(let i=0;i<per;i++){const cx=(i-(per-1)/2)*pitch;add(new T.Mesh(new T.CylinderGeometry(b/2,b/2,st*1.6,24,1,true),mat(0x9fb4c8,{transparent:true,opacity:.22,side:T.DoubleSide,metalness:.1})),[cx,st*.7,0],bg);
+   add(new T.Mesh(new T.BoxGeometry(b*1.25,.35,b*1.25),dark),[cx,st*1.6,0],bg);S3.p.push({m:add(new T.Mesh(new T.CylinderGeometry(b*.46,b*.46,st*.45,24),acc),[cx,st*.7,0],bg),base:st*.7,amp:st*.38,o:i*2.4+bk*1.3})}}
+ const top=st*1.9+(V?b*.6:0);
+ if(tier>=2){add(new T.Mesh(new T.BoxGeometry(len*.8,b*1.3,b*1.5),acc),[0,top+b*.6,0]);add(new T.Mesh(new T.ConeGeometry(b*.7,b*1.4,24),metal),[len*.25,top+b*1.7,0])}
+ else{add(new T.Mesh(new T.BoxGeometry(len*.9,b*.45,b*.9),metal),[0,top+b*.2,0]);if(tier==1){add(new T.Mesh(new T.TorusGeometry(b*.8,b*.3,16,32),acc),[len/2+b*1.2,st,0]);add(new T.Mesh(new T.CylinderGeometry(b*.5,b*.5,b*.7,24).rotateZ(Math.PI/2),metal),[len/2+b*1.2,st,0])}}
+ S3.cam.position.set(0,st*3,Math.max(9,len*1.15+b*3));S3.cam.lookAt(0,st*.8,0)}
+function loop3(n){const dt=Math.min(.05,(n-L3)/1000);L3=n;wa+=dt*(idle?25:80+rev*900);document.querySelectorAll('#car .wh').forEach(w=>w.setAttribute('transform','rotate('+wa+' '+w.dataset.x+' 98)'));
+ if(S3){if(!S3.drag&&!reduce)S3.ry+=dt*.25;S3.grp.rotation.y=S3.ry;S3.grp.rotation.x=S3.rx*.4;for(const q of S3.p)q.m.position.y=q.base+q.amp*Math.cos(ph+q.o);S3.ren.render(S3.sc,S3.cam)}requestAnimationFrame(loop3)}
+init3d();requestAnimationFrame(loop3);
+buildEng(4,'#4A5260');requestAnimationFrame(loop);
+/* rendering */
+const lnk=n=>{const q=encodeURIComponent(n.replace(/\(.*?\)/g,'').trim());return `<br><a href="https://www.google.com/search?tbm=isch&q=${q}+car" target="_blank" rel="noopener">Photos</a><a href="https://sketchfab.com/search?q=${q}&type=models" target="_blank" rel="noopener">3D models</a>`};
+const known=k=>(k.status=='exact'?`<b>This is the ${k.name}</b> (${k.cc} cc, ${Math.round(k.hp)} hp at ${k.rpm} rpm).`:k.status=='close'?`Closest real engine: <b>${k.name}</b> (${k.cc} cc, ${Math.round(k.hp)} hp at ${k.rpm} rpm), within ${Math.round(k.gap*100)}% on every number.`:`No real engine in our data is close. Nearest is ${k.name}, but it is off by up to ${Math.round(k.gap*100)}%.`)+(k.status!='none'?lnk(k.name):'');
+function card(i,d,title,sub,col,anim,delay){const st=(d.cyl?`<div class="stat"><b>${d.lay?lname(d.lay,d.cyl):d.cyl+' cylinders'}</b><span>${d.cc} cc</span></div><div class="stat"><b>${d.rpm} rpm</b><span>stroke ${d.stroke} mm</span></div>`:'')+
+ `<div class="stat"><b>${d.bmep.toFixed(1)} bar</b><span>cylinder pressure (BMEP)</span></div><div class="stat"><b>${d.speed.toFixed(1)} m/s</b><span>piston speed</span></div><div class="stat"><b>${Math.round(d.hpl)} hp/L</b><span>power per litre</span></div>`;
+ return `<div class="card ${anim?'pop':''}" style="--c:${col};--d:${delay}s"><h3>${title}</h3><div class="sub">${sub}</div><div class="stats">${st}</div><b>What to use</b><ul>${d.parts.map(p=>`<li>${p}</li>`).join('')}</ul><div class="known">${known(d.known)}</div></div>`}
+const empty=(i,anim)=>`<div class="card ${anim?'pop':''}" style="--c:${COL[3]}"><h3>${TN[i]}</h3><div class="sub">${SUBS[i]}</div>Not reachable at this risk level.</div>`;
+function why(power,fuel,cap){const keep={...OPT};let m='';const ok=()=>options(Math.round(power),fuel,cap).tiers.some(x=>x);
+ if(OPT.boost=='na'){OPT.boost='auto';if(ok())m=' Naturally aspirated engines top out near 14 bar of cylinder pressure, so <b>adding a turbo makes this reachable</b>: set Boost to "Let the AI choose".';OPT.boost=keep.boost}
+ if(!m&&OPT.layout!='auto'){OPT.layout='auto';if(ok())m=' That layout cannot do it, but <b>letting the AI choose the layout</b> can.';OPT.layout=keep.layout}return m}
+function showOptions(power,fuel,cap,anim){const r=options(Math.round(power),fuel,cap),[t0,t1,t2]=r.tiers;$('banner').innerHTML='';
+ if(r.feas){setGauge(3);document.body.classList.remove('bad');void document.body.offsetWidth;document.body.classList.add('bad');
+  $('banner').innerHTML=`<div class="banner"><b>Not reachable.</b> No design in our data makes ${Math.round(power)} hp${cap?' within '+cap+' cc':''}, even at extreme risk. The closest feasible goal is about <b>${Math.round(r.feas)} hp</b>.${why(power,fuel,cap)}</div>`;
+  $('out').innerHTML='';idle=true;buildEng(4,'#4A5260');return}
+ const lo=t0?0:t1?1:2,d=[t0,t1,t2][lo];setGauge(lo);idle=false;window.D3x={ratio:d.ratio,stroke:d.stroke,lay:d.lay};buildEng(d.cyl,COL[lo]);rev=Math.min(1,d.rpm/12000);
+ $('out').innerHTML=`<div class="cards">${t0?card(0,t0,'Proven',SUBS[0],COL[0],anim,0):empty(0,anim)}${t1?card(1,t1,'Pushed',SUBS[1],COL[1],anim,.08):empty(1,anim)}</div><details style="margin-top:14px" ${(!t0&&!t1)?'open':''}><summary>Race and drag options (engine lasts seconds)</summary>${t2?card(2,t2,'Extreme',SUBS[2],COL[2],false,0):empty(2,false)}</details><div class="msg" style="margin-top:10px">Not what you had in mind? Pick an engine layout (inline, V or boxer) or ask for naturally aspirated or turbo on the left, and the AI redesigns it.</div>`}
+function showSpec(anim){const r=check(+$('sp').value,+$('scc').value,+$('srpm').value,+$('sst').value,$('fuel3').value);$('banner').innerHTML='';
+ window.KIND=undefined;window.D3x={ratio:1,stroke:+$('sst').value};setGauge(r.tier);idle=false;buildEng(+$('scyl').value,COL[r.tier]);rev=Math.min(1,+$('srpm').value/12000);
+ $('hero').className='big';countTo($('hero'),r.hpl,0,anim?900:1,' hp/L');$('herolbl').textContent='Power per litre';$('herosub').textContent=TN[r.tier]+' territory';
+ if(r.tier==3){$('banner').innerHTML='<div class="banner"><b>Beyond anything in our data.</b> This spec is not currently possible.</div>';document.body.classList.remove('bad');void document.body.offsetWidth;document.body.classList.add('bad')}
+ $('out').innerHTML=card(0,r,TN[r.tier],RISK[r.tier],COL[r.tier],anim,0)}
+$('lay').onchange=$('bst').onchange=()=>{OPT.layout=$('lay').value;OPT.boost=$('bst').value;if(mode==1)run1(true);else if(mode==2)run2(true)};
+/* find a car by name */
+const TRIMS=new Set('legender gr gr-s sport sportz zxi zxi+ vxi lxi zx vx gx sx plus pro facelift top base at mt amt dct 4x2 4x4 petrol diesel automatic manual'.split(' '));
+const nrm=s=>s.toLowerCase().replace(/[^a-z0-9+ ]/g,' ').replace(/\s+/g,' ').trim();
+const NAMES=KNOWN.map(k=>[nrm(k[0]),k]);
+function findCar(q){const t=nrm(q).split(' ').filter(w=>w.length>1);if(!t.length)return{hits:[]};
+ let hits=NAMES.filter(([n])=>t.every(w=>n.includes(w))).map(x=>x[1]);if(hits.length)return{hits,dropped:[]};
+ const core=t.filter(w=>!TRIMS.has(w)),dropped=t.filter(w=>TRIMS.has(w));
+ if(core.length&&dropped.length){hits=NAMES.filter(([n])=>core.every(w=>n.includes(w))).map(x=>x[1]);if(hits.length)return{hits,dropped}}
+ const sc=NAMES.map(([n,k])=>[core.concat(dropped).filter(w=>w.length>=4&&n.includes(w)).length,k]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]);
+ return{hits:[],near:sc.slice(0,6).map(x=>x[1])}}
+function showCar(k,note,anim){const cyl=k[4]||4,fuel=k[5]=='Diesel'?'Diesel':'Petrol',st=Math.pow(4*(k[1]/cyl)*1000/3.14159,1/3),r=check(k[2],k[1],k[3],st,fuel),n=[3,4,6,8,12].reduce((a,b)=>Math.abs(b-cyl)<Math.abs(a-cyl)?b:a);
+ window.KIND=undefined;window.D3x={ratio:1,stroke:Math.round(st*10)/10};setGauge(r.tier);idle=false;buildEng(n,COL[r.tier]);rev=Math.min(1,k[3]/12000);
+ $('hero').className='big';countTo($('hero'),k[2],0,anim?800:1,' hp');$('herolbl').textContent=k[0];$('herosub').textContent=k[1]+' cc · '+(k[4]||'?')+' cyl · peak power at '+k[3]+' rpm'+(k[6]?' · '+Math.round(k[6])+' Nm':'');
+ $('banner').innerHTML=note?`<div class="banner" style="border-color:#2A2E37;background:#171A21">${note}</div>`:'';
+ $('out').innerHTML=card(0,r,TN[r.tier]+' engine',RISK[r.tier],COL[r.tier],anim,0)+'<div class="msg" style="margin-top:8px">Stroke is estimated (equal bore and stroke), so piston speed is approximate.</div>'}
+function run4(anim){const q=$('q').value,r=findCar(q);$('alts').innerHTML='';
+ if(r.hits.length){const pick=k=>showCar(k,r.dropped&&r.dropped.length?`Matched on <b>${k[0]}</b>. Your trim word "${r.dropped.join(' ')}" is not in our data, so check that your variant uses this same engine.`:`Found <b>${k[0]}</b> in our data.`,true);pick(r.hits[0]);
+  r.hits.slice(1,7).forEach(k=>{const b=document.createElement('button');b.className='chip';b.textContent=k[0];b.onclick=()=>pick(k);$('alts').appendChild(b)})}
+ else{setGauge(0);setFace(-1);$('out').innerHTML='';$('hero').textContent='--';$('herolbl').textContent='Not in our data';$('herosub').textContent='';
+  $('banner').innerHTML=`<div class="banner"><b>"${q}" is not in our data yet</b> (${KNOWN.length} engines covered). You can still enter its engine numbers in the <b>Check my engine</b> tab.</div>`;
+  (r.near||[]).forEach(k=>{const b=document.createElement('button');b.className='chip';b.textContent=k[0];b.onclick=()=>{$('q').value=k[0];run4(true)};$('alts').appendChild(b)})}}
+$('names').innerHTML=KNOWN.map(k=>`<option value="${k[0].replace(/"/g,'')}">`).join('');$('go4').onclick=()=>run4(true);$('q').onkeydown=e=>{if(e.key=='Enter')run4(true)};
+$('cov').textContent=`Data: ${KNOWN.length} engines (Indian-market cars plus sourced extreme engines).`;
+/* mode 1 and 2 drivers */
+function run1(anim){window.KIND=$('kind').value;const s=+$('secs').value,w=WT[$('kind').value],hp=goalHp(s,w);$('herolbl').textContent='Power needed';$('hero').className='big';
+ countTo($('hero'),hp,0,anim?900:1,' hp');$('herosub').textContent=`for a ${$('kind').value.toLowerCase()} of about ${w} kg`+(+$('size').value?' · engine up to '+(+$('size').value/1000).toFixed(1)+' L':'')+(s<3?' · below 3 s, grip matters more than power':'');showOptions(hp,'Petrol',+$('size').value||null,anim)}
+function run2(anim){window.KIND=undefined;const hp=+$('hp').value;$('herolbl').textContent='Power goal';$('hero').className='big';countTo($('hero'),hp,0,anim?700:1,' hp');$('herosub').textContent=$('fuel2').value+(+$('cap').value?' · up to '+$('cap').value+' cc':'');showOptions(hp,$('fuel2').value,+$('cap').value||null,anim)}
+let pend=0;const soon=f=>{cancelAnimationFrame(pend);pend=requestAnimationFrame(f)};
+$('secs').oninput=()=>{$('secsv').textContent=(+$('secs').value).toFixed(1);soon(()=>run1(false))};$('kind').onchange=()=>run1(true);$('size').onchange=()=>run1(true);
+$('hp').oninput=()=>{$('hpv').textContent=$('hp').value;soon(()=>run2(false))};$('go2').onclick=()=>run2(true);$('go3').onclick=()=>showSpec(true);
+$('launch').onclick=()=>{run1(true);const s=+$('secs').value,hero=$('hero'),t0=performance.now();$('herolbl').textContent='Speed';hero.className='big speed';idle=false;
+ (function f(n){const k=Math.min(1,(n-t0)/(s*1000));hero.textContent=Math.round(k*100)+' km/h';rev=.25+.75*k;
+  if(k<1)requestAnimationFrame(f);else{hero.textContent='100 km/h';$('herosub').textContent='in '+s.toFixed(1)+' seconds';setTimeout(()=>{$('herolbl').textContent='Power needed';run1(false)},1600)}})(t0)};
+$('breaker').onclick=()=>{$('hp').value=2000;$('hpv').textContent=2000;$('cap').value=1000;run2(true)};
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x==b));mode=+b.dataset.t;$('prefs').classList.toggle('hid',mode>2);[1,2,3,4].forEach(i=>$('t'+i).classList.toggle('hid',i!=mode));$('out').innerHTML='';$('banner').innerHTML='';
+ idle=true;buildEng(4,'#4A5260');setGauge(0);setFace(-1);$('hero').textContent='--';$('herosub').textContent='Pick a goal to begin';$('herolbl').textContent='Ready'});
+[['Family hatchback',11,'Hatchback',0],['Hot hatch, small engine',5.5,'Hatchback',1400],['Sports car',3.5,'Sports car',0],['Tiny-engine hypercar',2.5,'Sports car',1400]].forEach(([n,s,k,c])=>{const b=document.createElement('button');b.className='chip';b.textContent=n+' · '+s+' s';
+ b.onclick=()=>{$('secs').value=s;$('secsv').textContent=s.toFixed(1);$('kind').value=k;$('size').value=c;run1(true)};$('presets').appendChild(b)});
+const sur=document.createElement('button');sur.className='chip';sur.textContent='Surprise me';sur.onclick=()=>{const s=+(2+Math.random()*9).toFixed(1);$('secs').value=s;$('secsv').textContent=s.toFixed(1);$('kind').selectedIndex=Math.floor(Math.random()*4);$('size').selectedIndex=Math.floor(Math.random()*4);run1(true)};$('presets').appendChild(sur);
+setGauge(0);setFace(-1);
+</script></body></html>
